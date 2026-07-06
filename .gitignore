@@ -1,0 +1,41 @@
+# 依赖
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-*
+
+# 上传文件（体积大，不纳入版本控制）
+backend/uploads/*.jpg
+backend/uploads/*.png
+backend/uploads/*.jpeg
+!backend/uploads/.gitkeep
+
+# 数据库
+*.db
+*.sqlite3
+*.sqlite
+
+# 系统
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 构建产物
+frontend/dist/
+*.log
+
+# Python
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+.venv/

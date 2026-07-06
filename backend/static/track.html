@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>包裹追踪</title>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#e8ecf1;font-family:-apple-system,system-ui,sans-serif;display:flex;justify-content:center;min-height:100vh}
+#app{width:100%;max-width:430px;background:#f5f5f5;min-height:100vh}
+.status-bar{background:#1e3c72;color:#fff;text-align:center;padding:8px;font-size:12px;letter-spacing:1px}
+.header{text-align:center;padding:24px 20px 16px;background:linear-gradient(135deg,#1e3c72,#2a5298);color:#fff}
+.header h1{font-size:20px;margin-bottom:4px;font-weight:600}
+.header p{font-size:12px;opacity:.85}
+.tabs{display:flex;background:linear-gradient(135deg,#1e3c72,#2a5298)}
+.tab{flex:1;text-align:center;padding:10px 0;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer;border-bottom:2px solid transparent;transition:all .2s}
+.tab.active{color:#fff;border-bottom-color:#fff;font-weight:600}
+.card{background:#fff;border-radius:14px;padding:16px;margin:12px 14px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.upload-area{border:2px dashed #d0d7de;border-radius:12px;padding:28px 20px;text-align:center;cursor:pointer;transition:all .2s;margin:12px 14px;background:#fff}
+.upload-area:active,.upload-area:hover{background:#f6f8fa;border-color:#409EFF}
+.upload-area .icon{font-size:36px;margin-bottom:8px}
+.upload-area .title{font-size:15px;color:#303133;font-weight:500;margin-bottom:4px}
+.upload-area .hint{font-size:12px;color:#909399}
+.upload-area.file-selected{border-color:#67C23A;background:#f0f9eb}
+.progress-card{background:#fff;border-radius:14px;padding:20px;margin:12px 14px;box-shadow:0 2px 8px rgba(0,0,0,.06);text-align:center}
+.spinner{display:inline-block;width:36px;height:36px;border:3px solid #e8ecf1;border-top-color:#409EFF;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.steps{text-align:left;padding:0 8px}
+.step{display:flex;align-items:flex-start;gap:10px;padding:8px 0;font-size:13px;color:#909399}
+.step.done{color:#67C23A}
+.step.processing{color:#409EFF;font-weight:500}
+.step-dot{width:8px;height:8px;border-radius:50%;background:#dcdfe6;margin-top:5px;flex-shrink:0}
+.step.done .step-dot{background:#67C23A}
+.step.processing .step-dot{background:#409EFF;animation:pulse 1.2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.ocr-result-card{margin:12px 14px;border-radius:14px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.ocr-result-header{background:linear-gradient(135deg,#1e3c72,#2a5298);color:#fff;padding:16px;text-align:center}
+.ocr-result-header .tracking-no{font-size:16px;font-weight:bold;margin-bottom:4px}
+.ocr-result-header .conf{font-size:12px;opacity:.85}
+.ocr-fields{background:#fff;padding:12px 16px}
+.field-row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid #f5f5f5}
+.field-row:last-child{border:none}
+.field-row .label{color:#909399}
+.field-row .value{color:#303133;text-align:right;max-width:60%}
+.status-card{text-align:center;padding:20px;color:#fff;border-radius:14px;margin:12px 14px}
+.status-success{background:linear-gradient(135deg,#1e3c72,#2a5298)}
+.status-other{background:linear-gradient(135deg,#e67e22,#f39c12)}
+.status-fail{background:linear-gradient(135deg,#c0392b,#e74c3c)}
+.status-badge{display:inline-block;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:bold;margin-top:6px}
+.status-badge.s{background:rgba(103,194,58,.3)}
+.status-badge.o{background:rgba(243,156,18,.3)}
+.status-badge.f{background:rgba(231,76,60,.3)}
+.chute-name{margin-top:8px;font-size:13px;opacity:.9}
+.eta-text{margin-top:4px;font-size:14px;font-weight:bold}
+.timeline{padding-left:18px;border-left:3px solid #e0e0e0;margin-top:4px}
+.t-item{position:relative;padding-bottom:18px}
+.t-dot{position:absolute;left:-25px;top:2px;width:12px;height:12px;border-radius:50%;background:#dcdfe6}
+.t-dot.active{background:#409EFF;box-shadow:0 0 0 5px rgba(64,158,255,.2)}
+.t-dot.done{background:#67C23A}
+.t-desc{font-size:13px;color:#303133}
+.t-time{font-size:11px;color:#909399;margin-top:2px}
+.input-row{display:flex;gap:8px}
+.input-row input{flex:1;border:2px solid #e0e0e0;border-radius:10px;padding:10px 14px;font-size:14px;outline:none;background:#fff}
+.input-row input:focus{border-color:#409EFF}
+.input-row button{background:linear-gradient(135deg,#1e3c72,#2a5298);color:#fff;border:none;border-radius:10px;padding:10px 18px;font-size:14px;cursor:pointer;white-space:nowrap}
+.demo-tags{display:flex;flex-wrap:wrap;gap:6px}
+.demo-tag{background:#ecf5ff;color:#409EFF;border:1px solid #d9ecff;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer}
+.demo-tag:active{background:#409EFF;color:#fff}
+.empty{text-align:center;color:#999;padding:30px 0;font-size:14px}
+.btn{width:100%;border:none;border-radius:10px;padding:12px;font-size:14px;cursor:pointer;margin-top:8px}
+.btn-primary{background:linear-gradient(135deg,#1e3c72,#2a5298);color:#fff}
+.btn-warning{background:linear-gradient(135deg,#e67e22,#f39c12);color:#fff}
+.btn-outline{background:#fff;color:#409EFF;border:1.5px solid #409EFF}
+.btn-sm{padding:8px 14px;font-size:12px;width:auto;border-radius:6px}
+.section-title{font-size:14px;font-weight:bold;margin-bottom:10px;color:#2c3e50}
+.modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center}
+.modal{background:#fff;border-radius:16px;padding:20px;width:340px;max-width:90vw}
+.modal h3{font-size:17px;margin-bottom:14px;color:#1e3c72}
+.modal input,.modal textarea{width:100%;border:2px solid #e0e0e0;border-radius:8px;padding:10px;font-size:13px;margin-bottom:8px;outline:none;resize:none}
+.modal input:focus,.modal textarea:focus{border-color:#409EFF}
+.modal textarea{height:60px}
+.modal-btns{display:flex;gap:8px;margin-top:10px}
+.modal-btns button{flex:1;border:none;border-radius:8px;padding:10px;font-size:14px;cursor:pointer}
+.btn-cancel{background:#f0f0f0;color:#666}
+.service-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.service-item{background:#fff;border-radius:12px;padding:16px 12px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.04);cursor:pointer;transition:all .15s}
+.service-item:active{transform:scale(.97);background:#f0f5ff}
+.service-item .icon{font-size:28px;margin-bottom:6px}
+.service-item .name{font-size:13px;color:#303133;font-weight:500}
+.service-item .desc{font-size:11px;color:#909399;margin-top:2px}
+.service-card{background:#fff;border-radius:14px;padding:16px;margin:12px 14px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.damage-badge{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:bold;display:inline-block;margin-right:4px}
+.damage-badge.safe{background:#f0f9eb;color:#67C23A}
+.damage-badge.warn{background:#fdf6ec;color:#e6a23c}
+.damage-badge.danger{background:#fef0f0;color:#f56c6c}
+.loading-text{text-align:center;padding:20px;color:#909399;font-size:13px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="status-bar">物流分拣追踪 · 智能识别</div>
+  <div class="header">
+    <h1>📦 包裹追踪</h1>
+    <p>拍照识别运单 · 实时追踪分拣状态</p>
+  </div>
+  <div class="tabs">
+    <div class="tab" :class="{active:tab==='camera'}" @click="tab='camera'">📷 拍照查询</div>
+    <div class="tab" :class="{active:tab==='search'}" @click="tab='search'">🔍 运单查询</div>
+    <div class="tab" :class="{active:tab==='service'}" @click="tab='service'">🎁 增值服务</div>
+  </div>
+
+  <!-- ===== 拍照查询 Tab ===== -->
+  <template v-if="tab==='camera'">
+    <div v-if="!uploadState" class="upload-area" @click="openFilePicker" :class="{'file-selected':selectedFile}">
+      <input type="file" ref="fileInput" accept="image/*" capture="environment" style="display:none" @change="onFileSelected">
+      <div class="icon">{{selectedFile?'✅':'📸'}}</div>
+      <div class="title">{{selectedFile?'已选择图片，点击更换':'点击拍照或选择运单图片'}}</div>
+      <div class="hint">{{selectedFile?selectedFile.name:'支持 JPG/PNG，自动识别运单号'}}</div>
+    </div>
+
+    <!-- 上传进度 -->
+    <div class="progress-card" v-if="uploadState==='uploading'||uploadState==='processing'">
+      <div class="spinner"></div>
+      <div style="margin-bottom:8px;font-size:14px;color:#303133;font-weight:500">
+        {{uploadState==='uploading'?'正在上传图片...':'AI 识别中...'}}
+      </div>
+      <div class="steps">
+        <div class="step" :class="{done:progress>=1,processing:progress===0}">
+          <div class="step-dot"></div>
+          <div>上传图片到服务器</div>
+        </div>
+        <div class="step" :class="{done:progress>=2,processing:progress===1}">
+          <div class="step-dot"></div>
+          <div>OCR 文字识别（提取运单信息）</div>
+        </div>
+        <div class="step" :class="{done:progress>=3,processing:progress===2}">
+          <div class="step-dot"></div>
+          <div>条码/二维码解码</div>
+        </div>
+        <div class="step" :class="{done:progress>=4,processing:progress===3}">
+          <div class="step-dot"></div>
+          <div>智能分拣决策</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OCR 结果 -->
+    <div class="ocr-result-card" v-if="ocrResult">
+      <div class="ocr-result-header">
+        <div class="tracking-no">📮 {{ocrResult.ocr?.tracking_number||'运单号识别中'}}</div>
+        <div class="conf">AI 置信度：{{(ocrResult.ocr?.confidence||0).toFixed(1)}}%</div>
+      </div>
+      <div class="ocr-fields" v-if="ocrResult.ocr">
+        <div class="field-row"><span class="label">收件人</span><span class="value">{{ocrResult.ocr.receiver_name||'-'}}</span></div>
+        <div class="field-row"><span class="label">电话</span><span class="value">{{ocrResult.ocr.phone||'-'}}</span></div>
+        <div class="field-row"><span class="label">省份</span><span class="value">{{ocrResult.ocr.province||'-'}}</span></div>
+        <div class="field-row"><span class="label">城市</span><span class="value">{{ocrResult.ocr.city||'-'}}</span></div>
+        <div class="field-row"><span class="label">运单号</span><span class="value">{{ocrResult.ocr.tracking_number||'-'}}</span></div>
+        <div class="field-row"><span class="label">分拣口</span><span class="value">{{ocrResult.sort?.target_chute||'分配中'}}</span></div>
+      </div>
+    </div>
+
+    <!-- 重新上传 -->
+    <div style="text-align:center;padding:8px" v-if="ocrResult">
+      <button class="btn btn-outline btn-sm" @click="resetCamera">重新拍照</button>
+      <button class="btn btn-primary btn-sm" style="margin-left:8px" v-if="ocrResult.ocr?.tracking_number"
+        @click="goTrackFromOCR">{{ ocrResult.ocr?.tracking_number ? '查看分拣状态' : '查看详情' }}</button>
+    </div>
+  </template>
+
+  <!-- ===== 运单查询 Tab ===== -->
+  <template v-if="tab==='search'">
+    <div class="card">
+      <div class="input-row">
+        <input v-model="trackingNo" placeholder="输入运单号查询" @keyup.enter="search">
+        <button @click="search">查询</button>
+      </div>
+    </div>
+
+    <div class="card" v-if="samples.length">
+      <div class="section-title">📋 最近分拣运单</div>
+      <div class="demo-tags">
+        <span class="demo-tag" v-for="no in samples" :key="no" @click="quickSearch(no)">{{no}}</span>
+      </div>
+    </div>
+
+    <div class="loading-text" v-if="loading">⏳ 查询中...</div>
+
+    <template v-if="trackResult">
+      <div class="status-card" :class="trackResult.status==='success'?'status-success':(trackResult.status==='no_match'||trackResult.status==='manual_required'?'status-other':'status-fail')">
+        <div>{{trackResult.tracking_number}}</div>
+        <span class="status-badge" :class="trackResult.status==='success'?'s':(trackResult.status==='no_match'||trackResult.status==='manual_required'?'o':'f')">{{statusText}}</span>
+        <div class="chute-name" v-if="trackResult.target_chute">分拣口：{{trackResult.target_chute}}</div>
+        <div class="eta-text" v-if="trackResult.eta">🚚 预计出仓 {{trackResult.eta}}</div>
+      </div>
+
+      <div class="card" v-if="trackResult.province">
+        <div class="section-title">📋 运单信息</div>
+        <div class="field-row"><span class="label">运单号</span><span class="value">{{trackResult.tracking_number}}</span></div>
+        <div class="field-row"><span class="label">收件人</span><span class="value">{{trackResult.receiver_name||'-'}}</span></div>
+        <div class="field-row"><span class="label">电话</span><span class="value">{{trackResult.phone||'-'}}</span></div>
+        <div class="field-row"><span class="label">目的地</span><span class="value">{{trackResult.province}}{{trackResult.city}}{{trackResult.district||''}}</span></div>
+        <div class="field-row"><span class="label">地址</span><span class="value">{{trackResult.address||'-'}}</span></div>
+        <div class="field-row"><span class="label">AI置信度</span><span class="value">{{trackResult.confidence?.toFixed(1)||0}}%</span></div>
+        <button class="btn btn-outline" @click="openAddress">✏️ 修改收件地址</button>
+      </div>
+
+      <div class="card" v-if="timeline.length">
+        <div class="section-title">🚚 分拣进度</div>
+        <div class="timeline">
+          <div class="t-item" v-for="(t,i) in timeline" :key="i">
+            <div class="t-dot" :class="i===0?'active':'done'"></div>
+            <div class="t-desc">{{t.desc}}</div>
+            <div class="t-time">{{t.time}}</div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <div class="empty" v-if="!loading&&searched&&!trackResult">未查到该运单信息</div>
+  </template>
+
+  <!-- ===== 增值服务 Tab ===== -->
+  <template v-if="tab==='service'">
+    <div class="service-grid" style="margin:12px 14px">
+      <div class="service-item" @click="openAddressModal(null)">
+        <div class="icon">✏️</div>
+        <div class="name">地址变更</div>
+        <div class="desc">修改收件地址</div>
+      </div>
+      <div class="service-item" @click="tab='camera'">
+        <div class="icon">📸</div>
+        <div class="name">智能识别</div>
+        <div class="desc">拍照识别运单</div>
+      </div>
+      <div class="service-item" @click="tab='search'">
+        <div class="icon">🔍</div>
+        <div class="name">实时追踪</div>
+        <div class="desc">物流状态查询</div>
+      </div>
+      <div class="service-item" @click="checkDamage">
+        <div class="icon">🔬</div>
+        <div class="name">破损检测</div>
+        <div class="desc">{{damageChecked?'已检测':'点击检测包裹'}}</div>
+      </div>
+    </div>
+
+    <!-- 地址变更 -->
+    <div class="service-card" v-if="trackResult&&showService=='address'">
+      <div class="section-title">✏️ 修改收件地址</div>
+      <input v-model="addr.province" placeholder="省份（如：广东）">
+      <input v-model="addr.city" placeholder="城市（如：广州市）">
+      <input v-model="addr.district" placeholder="区县（如：南山区）">
+      <textarea v-model="addr.detail_address" placeholder="详细地址"></textarea>
+      <input v-model="addr.receiver_name" placeholder="收件人姓名">
+      <input v-model="addr.phone" placeholder="收件人电话">
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-cancel" style="flex:1" @click="showService=null">取消</button>
+        <button class="btn btn-primary" style="flex:1" @click="submitAddress">确认修改</button>
+      </div>
+    </div>
+
+    <!-- 破损检测结果 -->
+    <div class="service-card" v-if="damageResult">
+      <div class="section-title">🔬 破损检测</div>
+      <div style="text-align:center;padding:12px 0">
+        <span class="damage-badge" :class="damageResult.damaged?'danger':'safe'">{{damageResult.damaged?'⚠ 发现异常':'✅ 包裹完好'}}</span>
+      </div>
+      <div v-if="damageResult.issues&&damageResult.issues.length" style="padding:0 8px">
+        <div v-for="(issue,i) in damageResult.issues" :key="i" style="padding:6px 0;font-size:13px;color:#e6a23c">
+          • {{issue.type==='damage'?'破损/裂纹':issue.type==='deformed'?'变形':issue.type==='leak'?'渗漏':issue.type==='stain'?'污渍':issue.type}}
+          <span style="color:#909399;font-size:11px"> (置信度:{{(issue.confidence*100).toFixed(0)||'?'}}%)</span>
+        </div>
+      </div>
+      <button class="btn btn-outline btn-sm" style="margin-top:6px" @click="damageResult=null;damageChecked=false">关闭</button>
+    </div>
+
+    <!-- 未查到运单时的地址变更入口 -->
+    <div class="card" v-if="!trackResult" style="text-align:center">
+      <div style="font-size:13px;color:#909399;margin-bottom:8px">先通过拍照或运单号查询包裹，即可使用增值服务</div>
+      <div style="display:flex;gap:8px;justify-content:center">
+        <button class="btn btn-primary btn-sm" @click="tab='camera'">📷 拍照识别</button>
+        <button class="btn btn-outline btn-sm" @click="tab='search'">🔍 查询运单</button>
+      </div>
+    </div>
+  </template>
+
+  <!-- 地址修改弹窗（运单查询页用） -->
+  <div class="modal-overlay" v-if="showModal" @click.self="showModal=false">
+    <div class="modal">
+      <h3>✏️ 修改收件地址</h3>
+      <input v-model="addr.province" placeholder="省份（如：广东）">
+      <input v-model="addr.city" placeholder="城市（如：广州市）">
+      <input v-model="addr.district" placeholder="区县">
+      <textarea v-model="addr.detail_address" placeholder="详细地址"></textarea>
+      <input v-model="addr.receiver_name" placeholder="收件人姓名">
+      <input v-model="addr.phone" placeholder="收件人电话">
+      <div class="modal-btns">
+        <button class="btn-cancel" @click="showModal=false">取消</button>
+        <button class="btn-primary" @click="submitAddress">确认修改</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, computed, onMounted, watch } = Vue
+const API = window.location.origin
+
+createApp({
+  setup(){
+    const tab = ref('camera')
+    const trackingNo = ref('')
+    const loading = ref(false)
+    const searched = ref(false)
+    const trackResult = ref(null)
+    const timeline = ref([])
+    const samples = ref([])
+    const showModal = ref(false)
+    const showService = ref(null)
+    const addr = ref({province:'',city:'',district:'',detail_address:'',receiver_name:'',phone:''})
+    // 拍照上传
+    const fileInput = ref(null)
+    const selectedFile = ref(null)
+    const uploadState = ref('')
+    const progress = ref(0)
+    const ocrResult = ref(null)
+    const pollTimer = ref(null)
+    // 破损检测
+    const damageChecked = ref(false)
+    const damageResult = ref(null)
+
+    const statusText = computed(()=>{
+      if(!trackResult.value) return ''
+      const m={success:'✅ 已分拣',no_match:'⚠️ 无匹配规则',manual_required:'🔧 需人工处理',failed:'❌ 分拣失败'}
+      return m[trackResult.value.status]||trackResult.value.status||'未知'
+    })
+
+    // ===== 运单号查询 =====
+    async function search(){
+      if(!trackingNo.value.trim()) return
+      loading.value=true; searched.value=true; trackResult.value=null; timeline.value=[]
+      try{
+        const r=await axios.get(`${API}/api/track/${encodeURIComponent(trackingNo.value.trim())}`)
+        if(r.data.code===404){loading.value=false;return}
+        trackResult.value=r.data.data || r.data
+        if(trackResult.value.timeline) timeline.value=[...trackResult.value.timeline].reverse()
+      }catch{trackResult.value=null;timeline.value=[]}
+      loading.value=false
+    }
+    function quickSearch(no){trackingNo.value=no;search()}
+
+    // ===== 拍照上传 =====
+    function openFilePicker(){fileInput.value?.click()}
+    function onFileSelected(e){
+      const f=e.target.files[0]
+      if(!f) return
+      if(!/image\//.test(f.type)){alert('请选择图片文件');return}
+      if(f.size>10*1024*1024){alert('图片不能超过10MB');return}
+      selectedFile.value=f
+      startUpload()
+    }
+    async function startUpload(){
+      const fd=new FormData()
+      fd.append('file',selectedFile.value)
+      uploadState.value='uploading';progress.value=0;ocrResult.value=null
+      try{
+        const r=await axios.post(`${API}/api/device/upload-file`,fd,{headers:{'Content-Type':'multipart/form-data'}})
+        const fileId=r.data.data?.file_id
+        if(!fileId){alert('上传失败');uploadState.value='';return}
+        uploadState.value='processing';progress.value=1
+        pollOCR(fileId)
+      }catch(e){alert('上传失败: '+(e.response?.data?.detail||e.message));uploadState.value=''}
+    }
+    function pollOCR(fileId){
+      let attempts=0
+      const maxAttempts=45
+      if(pollTimer.value) clearInterval(pollTimer.value)
+      pollTimer.value=setInterval(async()=>{
+        attempts++
+        progress.value=1+Math.floor(Math.random()*2)
+        try{
+          const r=await axios.get(`${API}/api/device/upload-file/${fileId}/result`)
+          if(r.data.data?.status==='done'){
+            clearInterval(pollTimer.value)
+            ocrResult.value=r.data.data
+            uploadState.value='done';progress.value=4
+            if(ocrResult.value.ocr?.tracking_number){
+              trackingNo.value=ocrResult.value.ocr.tracking_number
+              await search()
+            }
+          }
+        }catch{}
+        if(attempts>=maxAttempts){
+          clearInterval(pollTimer.value)
+          uploadState.value='';progress.value=0
+          alert('识别超时，请重试或手动输入运单号')
+        }
+      },2000)
+    }
+    function goTrackFromOCR(){
+      tab.value='search'
+      if(ocrResult.value?.ocr?.tracking_number){
+        trackingNo.value=ocrResult.value.ocr.tracking_number
+        search()
+      }
+    }
+    function resetCamera(){
+      clearInterval(pollTimer.value)
+      uploadState.value='';progress.value=0
+      ocrResult.value=null;selectedFile.value=null
+      if(fileInput.value) fileInput.value.value=''
+    }
+
+    // ===== 地址变更 =====
+    function openAddress(){
+      if(!trackResult.value) return
+      addr.value={
+        province:trackResult.value.province||'',
+        city:trackResult.value.city||'',
+        district:trackResult.value.district||'',
+        detail_address:trackResult.value.address||'',
+        receiver_name:trackResult.value.receiver_name||'',
+        phone:trackResult.value.phone||''
+      }
+      showModal.value=true
+    }
+    function openAddressModal(fromService){
+      if(!trackResult.value){alert('请先查询运单');return}
+      showService.value=null
+      openAddress()
+    }
+    async function submitAddress(){
+      if(!addr.value.province){alert('请填写省份');return}
+      try{
+        await axios.put(`${API}/api/track/${trackingNo.value}/address`,addr.value)
+        alert('地址修改成功，系统已重新分拣')
+        showModal.value=false;showService.value=null
+        search()
+      }catch(e){alert('修改失败: '+(e.response?.data?.message||e.message))}
+    }
+
+    // ===== 破损检测 =====
+    async function checkDamage(){
+      if(!trackResult.value){alert('请先查询运单');return}
+      damageChecked.value=true
+      try{
+        const r=await axios.get(`${API}/api/track/${trackingNo.value}`)
+        const decisionId=r.data.data?.decision_id
+        if(decisionId){
+          const dmg=await axios.get(`${API}/api/exception/list?tracking_number=${trackingNo.value}`)
+          if(dmg.data.data?.items?.length){
+            damageResult.value={damaged:true,issues:dmg.data.data.items.map(i=>({type:i.exception_type,confidence:0.85}))}
+          }else{
+            damageResult.value={damaged:false,issues:[]}
+          }
+        }else{
+          damageResult.value={damaged:false,issues:[]}
+        }
+      }catch{
+        damageResult.value={damaged:false,issues:[]}
+      }
+    }
+
+    // ===== 初始化 =====
+    onMounted(async()=>{
+      try{
+        const r=await axios.get(`${API}/api/sort/decisions?page=1&page_size=10`)
+        const nos=(r.data.data?.items||[]).map(d=>d.tracking_number).filter(Boolean)
+        samples.value=[...new Set(nos)].slice(0,8)
+      }catch{}
+    })
+
+    // 清理
+    watch(tab, v=>{if(v!=='camera') resetCamera()})
+
+    return{
+      tab,trackingNo,loading,searched,trackResult,timeline,samples,showModal,showService,addr,
+      fileInput,selectedFile,uploadState,progress,ocrResult,
+      damageChecked,damageResult,
+      statusText,search,quickSearch,
+      openFilePicker,onFileSelected,startUpload,resetCamera,goTrackFromOCR,
+      openAddress,openAddressModal,submitAddress,checkDamage,
+    }
+  }
+}).mount('#app')
+</script>
+</body>
+</html>

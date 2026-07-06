@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>📦 包裹追踪小程序</title>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#e8ecf1;font-family:-apple-system,system-ui,sans-serif;display:flex;justify-content:center;min-height:100vh}
+#app{width:100%;max-width:430px;background:#f5f5f5;min-height:100vh;position:relative}
+.status-bar{background:#2c3e50;color:#fff;text-align:center;padding:10px;font-size:13px}
+.header{text-align:center;padding:30px 20px 20px;background:linear-gradient(135deg,#1e3c72,#2a5298);color:#fff}
+.header h1{font-size:22px;margin-bottom:6px}
+.header p{font-size:13px;opacity:.85}
+.card{background:#fff;border-radius:14px;padding:18px;margin:14px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.input-row{display:flex;gap:8px}
+.input-row input{flex:1;border:2px solid #e0e0e0;border-radius:10px;padding:12px 16px;font-size:15px;outline:none}
+.input-row input:focus{border-color:#409EFF}
+.input-row button{background:linear-gradient(135deg,#1e3c72,#2a5298);color:#fff;border:none;border-radius:10px;padding:12px 20px;font-size:15px;cursor:pointer;white-space:nowrap}
+.section-title{font-size:15px;font-weight:bold;margin-bottom:12px;color:#2c3e50}
+.demo-tags{display:flex;flex-wrap:wrap;gap:6px}
+.demo-tag{background:#ecf5ff;color:#409EFF;border:1px solid #d9ecff;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer}
+.demo-tag:active{background:#409EFF;color:#fff}
+.status-card{text-align:center;padding:24px;color:#fff;border-radius:14px;margin:14px}
+.status-success{background:linear-gradient(135deg,#1e3c72,#2a5298)}
+.status-failed{background:linear-gradient(135deg,#c0392b,#e74c3c)}
+.track-no{font-size:17px;font-weight:bold;margin-bottom:8px}
+.status-badge{display:inline-block;padding:6px 18px;border-radius:20px;font-size:13px;font-weight:bold}
+.status-badge.success{background:rgba(103,194,58,.3)}
+.status-badge.failed{background:rgba(245,108,108,.3)}
+.chute-info{margin-top:10px;font-size:13px;opacity:.85}
+.info-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:14px}
+.info-row .label{color:#909399}
+.timeline{padding-left:20px;border-left:3px solid #e0e0e0}
+.t-item{position:relative;padding-bottom:22px}
+.t-dot{position:absolute;left:-27px;top:2px;width:14px;height:14px;border-radius:50%;background:#dcdfe6}
+.t-dot.active{background:#409EFF;box-shadow:0 0 0 5px rgba(64,158,255,.2)}
+.t-dot.done{background:#67C23A}
+.t-desc{font-size:14px;color:#303133}
+.t-time{font-size:12px;color:#909399;margin-top:2px}
+.empty{text-align:center;color:#999;padding:40px 0}
+.btn-address{width:100%;background:#ecf5ff;color:#409EFF;border:none;border-radius:10px;padding:12px;font-size:14px;cursor:pointer;margin-top:12px}
+.loading{text-align:center;padding:30px;color:#909399}
+.modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center}
+.modal{background:#fff;border-radius:16px;padding:24px;width:350px;max-width:90vw}
+.modal h3{margin-bottom:16px;font-size:18px}
+.modal input{width:100%;border:2px solid #e0e0e0;border-radius:8px;padding:10px;font-size:14px;margin-bottom:10px;outline:none}
+.modal input:focus{border-color:#409EFF}
+.modal-btns{display:flex;gap:8px;margin-top:12px}
+.modal-btns button{flex:1;border:none;border-radius:8px;padding:10px;font-size:14px;cursor:pointer}
+.btn-primary{background:#409EFF;color:#fff}
+.btn-cancel{background:#f0f0f0;color:#666}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="status-bar">📶 物流分拣追踪小程序</div>
+  
+  <div class="header">
+    <h1>📦 包裹追踪</h1>
+    <p>输入运单号查询分拣状态与物流详情</p>
+  </div>
+  
+  <div class="card">
+    <div class="input-row">
+      <input v-model="trackingNo" placeholder="输入运单号（如 SF7591795563）" @keyup.enter="search">
+      <button @click="search">查询</button>
+    </div>
+  </div>
+  
+  <div class="card" v-if="samples.length">
+    <div class="section-title">📋 点击示例运单号查询</div>
+    <div class="demo-tags">
+      <span class="demo-tag" v-for="no in samples" :key="no" @click="quickSearch(no)">{{ no }}</span>
+    </div>
+  </div>
+  
+  <div class="loading" v-if="loading">⏳ 查询中...</div>
+  
+  <template v-if="result">
+    <div class="status-card" :class="['success','completed','verified'].includes(result.status)?'status-success':'status-failed'">
+      <div class="track-no">📦 {{ trackingNo }}</div>
+      <span class="status-badge" :class="result.status==='success'?'success':'failed'">{{ statusText }}</span>
+      <div class="chute-info" v-if="result.target_chute">分拣口：{{ result.target_chute }}</div>
+      <div class="chute-info" v-if="result.eta" style="margin-top:6px;font-size:14px;font-weight:bold">🚚 预计出仓：{{ result.eta }}</div>
+    </div>
+    
+    <div class="card" v-if="delivery">
+      <div class="section-title">🚛 配送信息</div>
+      <div class="info-row"><span class="label">当前状态</span><span style="color:#67C23A;font-weight:bold">{{ delivery.node_status_name || '已揽收' }}</span></div>
+      <div class="info-row"><span class="label">承运车辆</span><span>{{ delivery.active_vehicle || '待分配' }}</span></div>
+      <div class="info-row"><span class="label">发货地</span><span>{{ delivery.origin || '南昌' }}</span></div>
+      <div class="info-row"><span class="label">目的地</span><span>{{ delivery.destination || '--' }}</span></div>
+      <div class="info-row" v-if="delivery.eta_minutes > 0"><span class="label">预计到达</span><span style="color:#409EFF">{{ formatEta(delivery.eta_minutes) }}</span></div>
+    </div>
+    
+    <div class="card" v-if="result.province">
+      <div class="section-title">📋 运单信息</div>
+      <div class="info-row"><span class="label">省份</span><span>{{ result.province }}</span></div>
+      <div class="info-row"><span class="label">城市</span><span>{{ result.city || '-' }}</span></div>
+      <div class="info-row"><span class="label">分拣口</span><span>{{ result.target_chute || '-' }}</span></div>
+      <button class="btn-address" @click="openAddress">✏️ 修改收件地址</button>
+    </div>
+    
+    <div class="card" v-if="timeline.length">
+      <div class="section-title">🚚 分拣进度</div>
+      <div class="timeline">
+        <div class="t-item" v-for="(t,i) in timeline" :key="i">
+          <div class="t-dot" :class="i===0?'active':'done'"></div>
+          <div class="t-desc">{{ t.desc }}</div>
+          <div class="t-time">{{ t.time }}</div>
+        </div>
+      </div>
+    </div>
+  </template>
+  
+  <div class="empty" v-if="!loading && searched && !result">未查到该运单信息</div>
+  
+  <div class="modal-overlay" v-if="showModal" @click.self="showModal=false">
+    <div class="modal">
+      <h3>✏️ 修改收件地址</h3>
+      <input v-model="addr.province" placeholder="省份（如：广东）">
+      <input v-model="addr.city" placeholder="城市（如：广州市）">
+      <input v-model="addr.address" placeholder="详细地址">
+      <div class="modal-btns">
+        <button class="btn-cancel" @click="showModal=false">取消</button>
+        <button class="btn-primary" @click="submitAddress">确认修改</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, computed, onMounted } = Vue
+const API = 'http://127.0.0.1:8003'
+
+createApp({
+  setup(){
+    const trackingNo = ref('')
+    const loading = ref(false)
+    const searched = ref(false)
+    const result = ref(null)
+    const timeline = ref([])
+    const samples = ref([])
+    const showModal = ref(false)
+    const delivery = ref(null)
+    const addr = ref({province:'',city:'',address:''})
+    
+    const statusText = computed(()=>{
+      if(!result.value) return ''
+      const m={success:'✅ 已分拣',completed:'✅ 已分拣',verified:'✅ 已核验',no_match:'⚠️ 无匹配',failed:'❌ 失败',manual_required:'🔧 需人工',awaiting_dispatch:'🚛 待发车',exception:'⚠️ 异常处理'}
+      return m[result.value.status]||result.value.status
+    })
+    
+    async function search(){
+      if(!trackingNo.value.trim()) return
+      loading.value=true; searched.value=true
+      try{
+        // 并行请求：分拣追踪 + 配送追踪
+        const [trackRes, logisticsRes] = await Promise.allSettled([
+          axios.get(`${API}/api/track/${encodeURIComponent(trackingNo.value.trim())}`),
+          axios.get(`${API}/api/logistics/track/${encodeURIComponent(trackingNo.value.trim())}`),
+        ])
+        if(trackRes.status==='fulfilled'){
+          const d=trackRes.value.data
+          result.value=d.data||d  // 兼容 {code,data:{...}} 格式
+          if(result.value?.timeline) timeline.value=result.value.timeline.reverse()
+        }else{result.value=null;timeline.value=[]}
+        if(logisticsRes.status==='fulfilled'){
+          const d=logisticsRes.value.data
+          delivery.value=d.data||d   // 兼容 {code,data:{...}} 格式
+          console.log('物流追踪:', delivery.value)
+        }else{delivery.value=null}
+      }catch(e){console.error('查询失败:',e);result.value=null;timeline.value=[];delivery.value=null}
+      loading.value=false
+    }
+    
+    function quickSearch(no){ trackingNo.value=no; search() }
+    
+    function openAddress(){
+      addr.value={province:result.value?.province||'',city:result.value?.city||'',address:''}
+      showModal.value=true
+    }
+    
+    async function submitAddress(){
+      if(!addr.value.province) return alert('请填写省份')
+      try{
+        await axios.put(`${API}/api/track/${trackingNo.value}/address`,addr.value)
+        alert('地址已修改，重新分拣中')
+        showModal.value=false
+        search()
+      }catch{alert('修改失败')}
+    }
+    
+    onMounted(async()=>{
+      try{
+        const r=await axios.get(`${API}/api/sort/decisions?page=1&page_size=10`)
+        const body=r.data.data||r.data
+        const nos=(body?.items||[]).map(d=>d.tracking_number).filter(Boolean)
+        samples.value=[...new Set(nos)].slice(0,8)
+      }catch{}
+    })
+    
+    function formatEta(minutes){
+      if(!minutes||minutes<=0) return '计算中'
+      const h=Math.floor(minutes/60),m=Math.round(minutes%60)
+      return h>0?h+'小时'+m+'分钟':m+'分钟'
+    }
+    
+    return{trackingNo,loading,searched,result,timeline,samples,showModal,addr,delivery,statusText,search,quickSearch,openAddress,submitAddress,formatEta}
+  }
+}).mount('#app')
+</script>
+</body>
+</html>
