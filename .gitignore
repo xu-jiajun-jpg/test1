@@ -5,6 +5,11 @@ __pycache__/
 *.pyo
 .env
 
+# 根目录临时文件（不提交）
+/package.json
+/package-lock.json
+/create_proposal.js
+
 # IDE
 .idea/
 .vscode/
